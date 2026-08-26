@@ -138,34 +138,64 @@ jobs:
           # （splits 里 hasProperty("ANDROID_ABI") 判断用），env 变量 ANDROID_ABI=xxx 不会被
           # Gradle 识别为项目属性，会导致 splits 不生效、回退到多 ABI。
           GRADLE_PROJECT_VERSION=1.9.0 PLATFORM=android URHO3D_SAMPLES=0 URHO3D_TOOLS=0 \
-            ./gradlew :android:urho3d-lib:publishToMavenLocal -PANDROID_ABI=arm64-v8a --no-daemon -q
+            ./gradlew :android:urho3d-lib:publishToMavenLocal -PANDROID_ABI=arm64-v8a --no-daemon
           # 确认发布产物落地（应能看到 io/urho3d/urho3d-lib-static-debug/1.9.0/）
           echo "=== Maven Local 发布检查 ==="
           ls "$HOME/.m2/repository/io/urho3d/urho3d-lib-static-debug/1.9.0/" 2>/dev/null || \
             ls "$HOME/.m2/repository/io/urho3d/urho3d-lib-static-debug/"
 
-      - name: 把库生成的头文件补进 AAR 并重打包（供 app CMake 用）
+      - name: 用 Python 把编译产物（include + lib）可靠打进 AAR
         run: |
-          # Urho3D.h 等头文件不是源码文件，而是库编译时在
-          # <urho3d-lib>/.cxx/cmake/debug/<abi>/include/ 下由 install_header_files
-          # 生成的。AGP 的 unzipJni 解包 AAR 时会用 AAR 内容重建暂存目录 app/.cxx，
-          # 因此预先复制到头文件位置会被冲刷掉——必须把 include 直接打进 AAR。
-          ABIS=arm64-v8a
-          LIBINC="$HOME/Urho3D/android/urho3d-lib/.cxx/cmake/debug/$ABIS/include"
+          # 库的 packageLibraryProvider 在 Gradle 配置期读取 staging 目录（此时原生尚未编译，
+          # cmake/debug 为空），导致发布出的 AAR 里根本没有 include/ 与 lib/（仅 262KB，无头文件无 .a）。
+          # 这里在原生编译完成后，用 Python 直接把 .cxx 里的 include 与 lib 追加进 AAR 同名目录，
+          # 路径与 FindUrho3D 期望的 JNI_DIR/urho3d/<config>/<abi>/ 布局一致。
           AAR=$(find "$HOME/.m2" -name 'urho3d-lib-static-debug*.aar' | head -1)
           echo "=== AAR 定位 ==="; ls -la "$AAR"
-          DIR=/tmp/aar_fix; rm -rf "$DIR"; mkdir -p "$DIR"
-          unzip -qo "$AAR" -d "$DIR"
-          echo "=== 库生成 include 内容检查 ==="
-          ls "$LIBINC/Urho3D/Urho3D.h" 2>&1
-          # 在 AAR 内 urho3d/debug/<abi>/ 下同时放 include/ 与根目录，覆盖 find_path 形态
-          mkdir -p "$DIR/urho3d/debug/$ABIS/include"
-          cp -R "$LIBINC/." "$DIR/urho3d/debug/$ABIS/include/"
-          cp -R "$LIBINC/Urho3D" "$DIR/urho3d/debug/$ABIS/Urho3D"
-          (cd "$DIR" && zip -qr urho3d-fixed.aar .)
-          mv -f "$DIR/urho3d-fixed.aar" "$AAR"
-          echo "=== 重打包后 AAR 内头文件检查 ==="
-          unzip -l "$AAR" | grep -E 'urho3d/debug/arm64-v8a/include/Urho3D/Urho3D.h|urho3d/debug/arm64-v8a/Urho3D/Urho3D.h|urho3d/debug/arm64-v8a/lib/lib'
+          python3 - "$AAR" <<'PY'
+          import sys, os, glob, zipfile
+          aar = sys.argv[1]
+          config, abi = 'debug', 'arm64-v8a'
+          # 定位原生编译产物目录（兼容 build/.cxx 与 .cxx 两种相对解析）
+          cands = glob.glob(os.path.expanduser('~/Urho3D/android/urho3d-lib') + '/*/.cxx/cmake/' + config + '/' + abi)
+          cands += glob.glob(os.path.expanduser('~/Urho3D/android/urho3d-lib/build') + '/.cxx/cmake/' + config + '/' + abi)
+          cands += glob.glob(os.path.expanduser('~/Urho3D/android/urho3d-lib/.cxx/cmake/' + config + '/' + abi))
+          cand = cands[0] if cands else None
+          print('=== 原生产物候选:', cand)
+          if cand is None:
+              sys.exit('未找到原生编译产物目录 .cxx/cmake/debug/arm64-v8a')
+          inc = os.path.join(cand, 'include')
+          lib = os.path.join(cand, 'lib')
+          print('include 存在:', os.path.isdir(inc), ' urho3d.h=', os.path.isfile(os.path.join(inc, 'Urho3D/Urho3D.h')))
+          print('lib 下文件:', os.listdir(lib) if os.path.isdir(lib) else None)
+          if not os.path.isdir(inc) or not os.path.isfile(os.path.join(inc, 'Urho3D/Urho3D.h')):
+              sys.exit('include/Urho3D/Urho3D.h 缺失，无法继续')
+          if not (os.path.isdir(lib) and any(f.endswith('.a') for f in os.listdir(lib))):
+              sys.exit('lib/*.a 缺失，无法继续')
+          tmp = aar + '.new'
+          with zipfile.ZipFile(aar, 'r') as zin, zipfile.ZipFile(tmp, 'w', zipfile.ZIP_DEFLATED) as zout:
+              names = set(zin.namelist())
+              for n in zin.namelist():
+                  zout.writestr(n, zin.read(n))
+              # include
+              for root, _, files in os.walk(inc):
+                  for f in files:
+                      fp = os.path.join(root, f)
+                      arc = os.path.join('urho3d', config, abi, 'include', os.path.relpath(fp, inc))
+                      zout.writestr(arc, open(fp, 'rb').read())
+              # lib
+              for f in os.listdir(lib):
+                  if f.endswith('.a'):
+                      zout.writestr(os.path.join('urho3d', config, abi, 'lib', f), open(os.path.join(lib, f), 'rb').read())
+          os.replace(tmp, aar)
+          print('=== 重打包完成，新 AAR 大小 ==='); print(os.path.getsize(aar))
+          with zipfile.ZipFile(aar) as z:
+              hits = [n for n in z.namelist()
+                      if n.startswith('urho3d/%s/%s/' % (config, abi)) and ('Urho3D.h' in n or n.endswith('.a'))]
+              for h in sorted(hits)[:20]:
+                  print(h)
+              print('匹配总数:', len(hits))
+PY
 
       - name: 构建调试 APK
         run: |
