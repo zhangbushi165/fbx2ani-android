@@ -13,6 +13,9 @@ concurrency:
   group: apk-build
   cancel-in-progress: false
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-24.04
