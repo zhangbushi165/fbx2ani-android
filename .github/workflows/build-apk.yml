@@ -7,6 +7,7 @@ on:
     paths:
       - 'urhoapp/**'
       - 'bin/Data/**'
+      - '.github/workflows/**'
 
 concurrency:
   group: apk-build
@@ -32,7 +33,7 @@ jobs:
 
       - name: 安装 Ruby/rake（生成 UrhoApp 工程用）
         run: |
-          gem install rake --no-document
+          sudo gem install rake --no-document
 
       - name: 克隆 Urho3D v1.8.1
         run: |
