@@ -48,8 +48,11 @@ jobs:
 
       - name: 注入播放器源码与资源
         run: |
-          cp urhoapp/UrhoApp.h   "$HOME/AniPlayer/app/src/cpp/UrhoApp.h"
-          cp urhoapp/UrhoApp.cpp "$HOME/AniPlayer/app/src/cpp/UrhoApp.cpp"
+          # 清掉骨架自带的 AniPlayer.cpp/.h（含其 main 宏），避免与我们的 main 冲突
+          rm -f "$HOME/AniPlayer/app/src/main/cpp/AniPlayer.cpp"
+          rm -f "$HOME/AniPlayer/app/src/main/cpp/AniPlayer.h"
+          cp urhoapp/UrhoApp.h   "$HOME/AniPlayer/app/src/main/cpp/UrhoApp.h"
+          cp urhoapp/UrhoApp.cpp "$HOME/AniPlayer/app/src/main/cpp/UrhoApp.cpp"
           rm -rf "$HOME/AniPlayer/bin/Data"
           cp -r bin/Data "$HOME/AniPlayer/bin/Data"
           rm -rf "$HOME/AniPlayer/bin/CoreData"
