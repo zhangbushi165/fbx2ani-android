@@ -98,7 +98,7 @@ jobs:
           # Urho3D 1.9.0 用的老版 Kotlin 1.4.10 在 JDK17 下访问 sun.nio.ch 被拒，需放行
           for f in "$HOME/Urho3D/gradle.properties" "$HOME/AniPlayer/gradle.properties"; do
             echo '# JDK17 兼容：放行 Kotlin 编译器访问 sun.nio.ch' >> "$f"
-            echo 'org.gradle.jvmargs=-Xmx2300m -XX:MaxMetaspaceSize=512m --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED' >> "$f"
+            echo 'org.gradle.jvmargs=-Xmx2300m -XX:MaxMetaspaceSize=512m --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED' >> "$f"
           done
           # 关闭 Kotlin 内嵌编译器守护进程对模块系统的高要求（改用编译守护）
           echo "kotlin.compiler.execution.strategy=in-process" >> "$HOME/AniPlayer/gradle.properties" 2>/dev/null || true
