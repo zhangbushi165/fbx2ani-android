@@ -152,7 +152,9 @@ jobs:
           ls "$LIBINC/Urho3D/Urho3D.h" 2>&1 || { echo "!! 未找到库生成头文件，列出库里位置："; find "$HOME/Urho3D/android/urho3d-lib/.cxx" -name Urho3D.h 2>/dev/null; }
           mkdir -p "$BASE/include" "$BASE/Urho3D"
           cp -R "$LIBINC/." "$BASE/include/"
-          cp -R "$LIBINC/Urho3D" "$BASE/Urho3D" 2>/dev/null
+          # find_path 除 <prefix>/include/Urho3D/ 外也可能搜 <prefix>/Urho3D/，两处都放；
+          # 注意目标已存在时 cp -R src dest 会套成 dest/src，故用 src/. + dest（尾斜杠）
+          cp -R "$LIBINC/Urho3D/." "$BASE/Urho3D/"
           echo "=== app 侧头文件检查 ==="
           ls "$BASE/include/Urho3D/Urho3D.h" "$BASE/Urho3D/Urho3D.h"
 
