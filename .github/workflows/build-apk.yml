@@ -63,9 +63,9 @@ jobs:
         run: |
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
           cd "$HOME/Urho3D"
-          # rake new 里用 first_match(/^# (Urho3D)$/, README.md) 判断是否处于项目根目录，
-          # 该字符串匹配在新版 Ruby(ubuntu-24.04)下会误判为失败。直接删掉这行 guard 绕过。
-          sed -i "/only be invoked in the Urho3D project root/d" rakefile
+          # ubuntu-24.04 自带 Ruby 3.3，已移除 File.exists?（Ruby 3.2+ 删除）；
+          # 全局替换为 File.exist?（2.5+ 均支持），否则 rake new 会 NoMethodError
+          sed -i 's/File\.exists?/File.exist?/g' rakefile
           PLATFORM=android rake new[AniPlayer,$HOME]
 
       - name: 注入播放器源码与资源
