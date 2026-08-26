@@ -141,24 +141,28 @@ jobs:
           ls "$HOME/.m2/repository/io/urho3d/urho3d-lib-static-debug/1.9.0/" 2>/dev/null || \
             ls "$HOME/.m2/repository/io/urho3d/urho3d-lib-static-debug/"
 
-      - name: 补齐 Urho3D 头文件（从库构建产物复制给 FindUrho3D）
+      - name: 把库生成的头文件补进 AAR 并重打包（供 app CMake 用）
         run: |
           # Urho3D.h 等头文件不是源码文件，而是库编译时在
           # <urho3d-lib>/.cxx/cmake/debug/<abi>/include/ 下由 install_header_files
-          # 生成的（DEST_INCLUDE_DIR=include/Urho3D）。直接把这个真实生成的 include
-          # 目录交给 app，避免依赖 AAR 是否打包了 include。
+          # 生成的。AGP 的 unzipJni 解包 AAR 时会用 AAR 内容重建暂存目录 app/.cxx，
+          # 因此预先复制到头文件位置会被冲刷掉——必须把 include 直接打进 AAR。
           ABIS=arm64-v8a
           LIBINC="$HOME/Urho3D/android/urho3d-lib/.cxx/cmake/debug/$ABIS/include"
-          BASE="$HOME/AniPlayer/app/.cxx/urho3d/debug/$ABIS"
-          echo "=== 库构建 include 检查 ==="
-          ls "$LIBINC/Urho3D/Urho3D.h" 2>&1 || { echo "!! 未找到库生成头文件，列出库里位置："; find "$HOME/Urho3D/android/urho3d-lib/.cxx" -name Urho3D.h 2>/dev/null; }
-          mkdir -p "$BASE/include" "$BASE/Urho3D"
-          cp -R "$LIBINC/." "$BASE/include/"
-          # find_path 除 <prefix>/include/Urho3D/ 外也可能搜 <prefix>/Urho3D/，两处都放；
-          # 注意目标已存在时 cp -R src dest 会套成 dest/src，故用 src/. + dest（尾斜杠）
-          cp -R "$LIBINC/Urho3D/." "$BASE/Urho3D/"
-          echo "=== app 侧头文件检查 ==="
-          ls "$BASE/include/Urho3D/Urho3D.h" "$BASE/Urho3D/Urho3D.h"
+          AAR=$(find "$HOME/.m2" -name 'urho3d-lib-static-debug*.aar' | head -1)
+          echo "=== AAR 定位 ==="; ls -la "$AAR"
+          DIR=/tmp/aar_fix; rm -rf "$DIR"; mkdir -p "$DIR"
+          unzip -qo "$AAR" -d "$DIR"
+          echo "=== 库生成 include 内容检查 ==="
+          ls "$LIBINC/Urho3D/Urho3D.h" 2>&1
+          # 在 AAR 内 urho3d/debug/<abi>/ 下同时放 include/ 与根目录，覆盖 find_path 形态
+          mkdir -p "$DIR/urho3d/debug/$ABIS/include"
+          cp -R "$LIBINC/." "$DIR/urho3d/debug/$ABIS/include/"
+          cp -R "$LIBINC/Urho3D" "$DIR/urho3d/debug/$ABIS/Urho3D"
+          (cd "$DIR" && zip -qr urho3d-fixed.aar .)
+          mv -f "$DIR/urho3d-fixed.aar" "$AAR"
+          echo "=== 重打包后 AAR 内头文件检查 ==="
+          unzip -l "$AAR" | grep -E 'urho3d/debug/arm64-v8a/include/Urho3D/Urho3D.h|urho3d/debug/arm64-v8a/Urho3D/Urho3D.h|urho3d/debug/arm64-v8a/lib/lib'
 
       - name: 构建调试 APK
         run: |
