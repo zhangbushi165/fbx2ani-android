@@ -77,12 +77,20 @@ jobs:
           rm -rf "$HOME/AniPlayer/bin/CoreData"
           cp -r "$HOME/Urho3D/bin/CoreData" "$HOME/AniPlayer/bin/CoreData"
 
-      - name: 写入低内存 Gradle 配置（防 OOM）
+      - name: 写入低内存 Gradle 配置（防 OOM）与 JDK17 兼容参数
         run: |
+          # 低内存，防 OOM
           echo "org.gradle.jvmargs=-Xmx2300m -XX:MaxMetaspaceSize=512m" >> "$HOME/Urho3D/gradle.properties"
           echo "org.gradle.workers.max=2" >> "$HOME/Urho3D/gradle.properties"
           echo "org.gradle.jvmargs=-Xmx2300m -XX:MaxMetaspaceSize=512m" >> "$HOME/AniPlayer/gradle.properties"
           echo "org.gradle.workers.max=2" >> "$HOME/AniPlayer/gradle.properties"
+          # Urho3D 1.9.0 用的老版 Kotlin 1.4.10 在 JDK17 下访问 sun.nio.ch 被拒，需放行
+          for f in "$HOME/Urho3D/gradle.properties" "$HOME/AniPlayer/gradle.properties"; do
+            echo '# JDK17 兼容：放行 Kotlin 编译器访问 sun.nio.ch' >> "$f"
+            echo 'org.gradle.jvmargs=-Xmx2300m -XX:MaxMetaspaceSize=512m --add-opens=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED' >> "$f"
+          done
+          # 关闭 Kotlin 内嵌编译器守护进程对模块系统的高要求（改用编译守护）
+          echo "kotlin.compiler.execution.strategy=in-process" >> "$HOME/AniPlayer/gradle.properties" 2>/dev/null || true
 
       - name: 移除废弃 Bintray 插件（其传递依赖 http-builder 已从 Maven 下架，会导致 classpath 解析失败）
         run: |
