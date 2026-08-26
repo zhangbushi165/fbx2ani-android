@@ -65,6 +65,19 @@ jobs:
           echo "org.gradle.jvmargs=-Xmx2300m -XX:MaxMetaspaceSize=512m" >> "$HOME/AniPlayer/gradle.properties"
           echo "org.gradle.workers.max=2" >> "$HOME/AniPlayer/gradle.properties"
 
+      - name: 移除废弃 Bintray 插件（其传递依赖 http-builder 已从 Maven 下架，会导致 classpath 解析失败）
+        run: |
+          cd "$HOME/Urho3D"
+          # 1) 删掉插件 id 声明（根 build.gradle.kts 的 apply false + urho3d-lib 的 apply）
+          sed -i -e '/id("com.jfrog.bintray")/d' \
+                 -e '/apply plugin.*com.jfrog.bintray/d' \
+                 build.gradle.kts android/urho3d-lib/build.gradle.kts
+          # 2) 删除 urho3d-lib 里跨行的 bintray {} 配置块
+          awk '/^bintray \{/,/^}/ {next} {print}' android/urho3d-lib/build.gradle.kts > _lib.tmp && \
+            mv _lib.tmp android/urho3d-lib/build.gradle.kts
+          echo "=== patch 前 bintray 残留检查（应为空）==="
+          grep -rn "bintray" build.gradle.kts android/urho3d-lib/build.gradle.kts || echo "（已完全清除）"
+
       - name: 编译并发布 urho3d-lib 到 Maven Local
         run: |
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
