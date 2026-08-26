@@ -31,6 +31,25 @@ jobs:
           cmdline-tools-version: 11076708
           cmake-version: 3.22.1
 
+      - name: 构建精简 SDK 目录（规避旧 AGP 无法解析预装 SDK 元数据的崩溃）
+        run: |
+          # AGP 4.2 内置的老 sdk-repository 库无法解析 runner 预装 SDK 里含新版
+          # 组件的元数据（如 "android-34" 的 XML），会抛 NumberFormatException "34x"。
+          # 于是用 sdkmanager 新建一个只含所需旧组件的干净 SDK，并让整个构建用它。
+          SM="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          CLEAN="$HOME/csdk"
+          mkdir -p "$CLEAN"
+          yes | "$SM" --sdk_root="$CLEAN" --install \
+            "platform-tools" \
+            "platforms;android-30" \
+            "build-tools;30.0.2" \
+            "cmake;3.22.1" \
+            "ndk;21.3.6528147" >/dev/null 2>&1 || true
+          echo "== 精简 SDK 已装组件 =="
+          ls "$CLEAN"
+          echo "ANDROID_HOME=$CLEAN" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$CLEAN" >> "$GITHUB_ENV"
+
       - name: 安装 Ruby/rake（生成 UrhoApp 工程用）
         run: |
           sudo gem install rake --no-document
