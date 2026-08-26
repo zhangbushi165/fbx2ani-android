@@ -1,0 +1,103 @@
+name: 构建安卓播放器 APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'urhoapp/**'
+      - 'bin/Data/**'
+
+concurrency:
+  group: apk-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android SDK + NDK (arm64)
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 11076708
+          cmake-version: 3.22.1
+
+      - name: 安装 Ruby/rake（生成 UrhoApp 工程用）
+        run: |
+          gem install rake --no-document
+
+      - name: 克隆 Urho3D v1.8.1
+        run: |
+          git clone --depth 1 --branch 1.8.1 --single-branch \
+            https://github.com/urho3d/Urho3D.git $HOME/Urho3D
+
+      - name: 生成官方 App 工程骨架 AniPlayer
+        run: |
+          export ANDROID_HOME="$ANDROID_SDK_ROOT"
+          cd "$HOME/Urho3D"
+          PLATFORM=android rake new[AniPlayer,$HOME]
+
+      - name: 注入播放器源码与资源
+        run: |
+          cp urhoapp/UrhoApp.h   "$HOME/AniPlayer/app/src/cpp/UrhoApp.h"
+          cp urhoapp/UrhoApp.cpp "$HOME/AniPlayer/app/src/cpp/UrhoApp.cpp"
+          rm -rf "$HOME/AniPlayer/bin/Data"
+          cp -r bin/Data "$HOME/AniPlayer/bin/Data"
+          rm -rf "$HOME/AniPlayer/bin/CoreData"
+          cp -r "$HOME/Urho3D/bin/CoreData" "$HOME/AniPlayer/bin/CoreData"
+
+      - name: 写入低内存 Gradle 配置（防 OOM）
+        run: |
+          echo "org.gradle.jvmargs=-Xmx2300m -XX:MaxMetaspaceSize=512m" >> "$HOME/Urho3D/gradle.properties"
+          echo "org.gradle.workers.max=2" >> "$HOME/Urho3D/gradle.properties"
+          echo "org.gradle.jvmargs=-Xmx2300m -XX:MaxMetaspaceSize=512m" >> "$HOME/AniPlayer/gradle.properties"
+          echo "org.gradle.workers.max=2" >> "$HOME/AniPlayer/gradle.properties"
+
+      - name: 编译并发布 urho3d-lib 到 Maven Local
+        run: |
+          export ANDROID_HOME="$ANDROID_SDK_ROOT"
+          cd "$HOME/Urho3D"
+          PLATFORM=android URHO3D_SAMPLES=0 URHO3D_TOOLS=0 \
+            ./gradlew build publishToMavenLocal --no-daemon
+
+      - name: 构建调试 APK
+        run: |
+          export ANDROID_HOME="$ANDROID_SDK_ROOT"
+          cd "$HOME/AniPlayer"
+          ./gradlew assembleDebug --no-daemon
+
+      - name: 收集 APK 路径
+        run: |
+          find "$HOME/AniPlayer" -name '*.apk' -type f
+          echo "APK_DIR=$(find "$HOME/AniPlayer" -name '*.apk' -type f -exec dirname {} \; | head -1)" >> "$GITHUB_ENV"
+
+      - name: 上传 APK 构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ani-viewer-apk
+          path: |
+            ${{ env.APK_DIR }}/*.apk
+          if-no-files-found: error
+
+      - name: 发布到 GitHub Release 便于手机下载
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apkfile=$(find "$HOME/AniPlayer" -name '*.apk' -type f | head -1)
+          echo "APK: $apkfile"
+          tag="ani-viewer-$(date +%Y%m%d-%H%M)"
+          gh release create "$tag" "$apkfile" \
+            --repo "${{ github.repository }}" \
+            --title "Ani 播放器 $tag" \
+            --notes "Urho3D 骨骼动画查看器（.ani 播放）。安装后打开即可看到走路动画，点下方按钮切换骨骼线框。" >/dev/null 2>&1 || echo "release create may fail, will attach to latest"
+          # 若上面失败（如 tag 已存在），附加到最新 release
+          latest=$(gh release list --repo "${{ github.repository }}" --limit 1 --json tagName --jq '.[0].tagName')
+          gh release upload "$latest" "$apkfile" --repo "${{ github.repository }}" --clobber
