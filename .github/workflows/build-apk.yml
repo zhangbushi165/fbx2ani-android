@@ -130,19 +130,35 @@ jobs:
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
           cd "$HOME/Urho3D"
           # 指定明确版本，避免浅克隆（无 tag）时 determineVersion() 取到 "Unversioned"，
-          # 保证与 app 侧引用一致。只发布 urho3d-lib 库（AAR），跳过官方 launcher-app 的 build
-          GRADLE_PROJECT_VERSION=1.9.0 PLATFORM=android URHO3D_SAMPLES=0 URHO3D_TOOLS=0 \
+          # 保证与 app 侧引用一致。只发布 urho3d-lib 库（AAR），跳过官方 launcher-app 的 build。
+          # 用 ANDROID_ABI 限定单 ABI（arm64-v8a，现代手机主流），既省事又省编译时间。
+          GRADLE_PROJECT_VERSION=1.9.0 ANDROID_ABI=arm64-v8a PLATFORM=android URHO3D_SAMPLES=0 URHO3D_TOOLS=0 \
             ./gradlew :android:urho3d-lib:publishToMavenLocal --no-daemon -q
           # 确认发布产物落地（应能看到 io/urho3d/urho3d-lib-static-debug/1.9.0/）
           echo "=== Maven Local 发布检查 ==="
           ls "$HOME/.m2/repository/io/urho3d/urho3d-lib-static-debug/1.9.0/" 2>/dev/null || \
             ls "$HOME/.m2/repository/io/urho3d/urho3d-lib-static-debug/"
 
+      - name: 补齐 Urho3D 头文件（AAR 未打包 include，需从源码复制给 FindUrho3D）
+        run: |
+          # 发布的 AAR 只带静态库，没打包 include 头文件；而 app 的 CMake 通过
+          # FindUrho3D 在 <JNI_DIR>/urho3d/debug/<abi>/ 下找 Urho3D.h。从源码把头文件
+          # 复制到该位置（同时放 include/ 子目录与根目录，覆盖 find_path 两种搜索形态）。
+          ABIS=arm64-v8a
+          BASE="$HOME/AniPlayer/app/.cxx/urho3d/debug/$ABIS"
+          mkdir -p "$BASE/include" "$BASE/Urho3D"
+          cp -R "$HOME/Urho3D/Source/Urho3D/." "$BASE/include/Urho3D/"
+          cp -R "$HOME/Urho3D/Source/Urho3D/." "$BASE/Urho3D/"
+          echo "=== 头文件检查 ==="
+          ls "$BASE/include/Urho3D/Urho3D.h" "$BASE/Urho3D/Urho3D.h"
+          echo "=== 静态库检查 ==="
+          ls -la "$BASE/lib/" 2>/dev/null || echo "（lib 目录将由 unzipJni 从 AAR 解出）"
+
       - name: 构建调试 APK
         run: |
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
           cd "$HOME/AniPlayer"
-          ./gradlew assembleDebug --no-daemon
+          ANDROID_ABI=arm64-v8a ./gradlew assembleDebug --no-daemon
 
       - name: 收集 APK 路径
         run: |
