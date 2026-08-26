@@ -101,8 +101,9 @@ jobs:
         run: |
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
           cd "$HOME/Urho3D"
+          # 只发布 urho3d-lib 库（AAR），供 AniPlayer 使用；跳过官方 launcher-app 的 build
           PLATFORM=android URHO3D_SAMPLES=0 URHO3D_TOOLS=0 \
-            ./gradlew build publishToMavenLocal --no-daemon
+            ./gradlew :android:urho3d-lib:publishToMavenLocal --no-daemon
 
       - name: 构建调试 APK
         run: |
