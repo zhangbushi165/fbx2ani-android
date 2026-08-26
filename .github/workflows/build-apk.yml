@@ -76,8 +76,8 @@ jobs:
           cp -r bin/Data "$HOME/AniPlayer/bin/Data"
           rm -rf "$HOME/AniPlayer/bin/CoreData"
           cp -r "$HOME/Urho3D/bin/CoreData" "$HOME/AniPlayer/bin/CoreData"
-          # 兼容当前 AGP：setBuildStagingDirectory() 方法已移除，改用属性赋值
-          sed -i 's/setBuildStagingDirectory(buildStagingDir)/buildStagingDirectory = buildStagingDir/' \
+          # 兼容当前 AGP：setBuildStagingDirectory() 方法已移除；该属性需 File 类型，故用 file() 包装 String
+          sed -i 's/setBuildStagingDirectory(buildStagingDir)/buildStagingDirectory = file(buildStagingDir)/' \
             "$HOME/AniPlayer/app/build.gradle.kts"
 
       - name: 写入低内存 Gradle 配置（防 OOM）与 JDK17 兼容参数
