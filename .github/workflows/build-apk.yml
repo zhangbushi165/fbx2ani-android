@@ -37,7 +37,7 @@ jobs:
 
       - name: 克隆 Urho3D v1.8.1
         run: |
-          git clone --depth 1 --branch 1.8.1 --single-branch \
+          git clone --depth 1 --branch 1.9.0 --single-branch \
             https://github.com/urho3d/Urho3D.git $HOME/Urho3D
 
       - name: 生成官方 App 工程骨架 AniPlayer

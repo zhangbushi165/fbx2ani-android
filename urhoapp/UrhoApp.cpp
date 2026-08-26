@@ -189,8 +189,8 @@ void UrhoApp::HandlePostRenderUpdate(StringHash /*eventType*/, VariantMap& /*eve
     {
         DebugRenderer* debug = scene_->GetComponent<DebugRenderer>();
         if (debug)
-            // false = 线段式骨骼可视化
-            debug->AddSkeleton(animModel_->GetSkeleton(), false);
+            // 橙色骨骼线框可视化
+            debug->AddSkeleton(animModel_->GetSkeleton(), Color(1.0f, 0.6f, 0.1f));
     }
 }
 
