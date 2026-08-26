@@ -92,7 +92,7 @@ jobs:
           # 关闭 Kotlin 内嵌编译器守护进程对模块系统的高要求（改用编译守护）
           echo "kotlin.compiler.execution.strategy=in-process" >> "$HOME/AniPlayer/gradle.properties" 2>/dev/null || true
 
-      - name: 移除废弃 Bintray 插件（其传递依赖 http-builder 已从 Maven 下架，会导致 classpath 解析失败）
+      - name: 移除废弃 Bintray 插件与文档 artifact（避免下架依赖 / 无效 doc target）
         run: |
           cd "$HOME/Urho3D"
           # 1) 删掉插件 id 声明（根 build.gradle.kts 的 apply false + urho3d-lib 的 apply）
@@ -102,8 +102,17 @@ jobs:
           # 2) 删除 urho3d-lib 里跨行的 bintray {} 配置块
           awk '/^bintray \{/,/^}/ {next} {print}' android/urho3d-lib/build.gradle.kts > _lib.tmp && \
             mv _lib.tmp android/urho3d-lib/build.gradle.kts
-          echo "=== patch 前 bintray 残留检查（应为空）==="
-          grep -rn "bintray" build.gradle.kts android/urho3d-lib/build.gradle.kts || echo "（已完全清除）"
+          # 3) 移除 documentation 相关发布，否则 publishToMavenLocal 会调用 cmake --target doc
+          #    （该 doc target 未随库配置，ninja 会报 unknown target 'doc' 导致失败）
+          sed -i -e '/artifact(tasks\["documentationZip"\])/d' \
+                 -e '/register<Zip>("documentationZip")/,/^    }/d' \
+                 -e '/register<Exec>("makeDoc")/,/^    }/d' \
+                 -e '/register<Task>("makeDocConfigurer")/,/^    }/d' \
+                 android/urho3d-lib/build.gradle.kts
+          echo "=== bintray 残留检查（应为空）==="
+          grep -rn "bintray" build.gradle.kts android/urho3d-lib/build.gradle.kts || echo "（已清除）"
+          echo "=== documentation/makeDoc 残留检查（应为空）==="
+          grep -rn "makeDoc\|documentationZip" android/urho3d-lib/build.gradle.kts || echo "（已清除）"
 
       - name: 编译并发布 urho3d-lib 到 Maven Local
         run: |
