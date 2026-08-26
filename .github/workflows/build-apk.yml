@@ -63,9 +63,9 @@ jobs:
         run: |
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
           cd "$HOME/Urho3D"
-          # ubuntu-24.04 自带 Ruby 3.3，已移除 File.exists?（Ruby 3.2+ 删除）；
-          # 全局替换为 File.exist?（2.5+ 均支持），否则 rake new 会 NoMethodError
-          sed -i 's/File\.exists?/File.exist?/g' rakefile
+          # ubuntu-24.04 自带 Ruby 3.3，已移除 File.exists? 与 Dir.exists?（Ruby 3.2+ 删除）；
+          # 全局替换为 .exist?（2.5+ 均支持），否则 rake new 会 NoMethodError
+          sed -i 's/\.exists?/\.exist?/g' rakefile
           PLATFORM=android rake new[AniPlayer,$HOME]
 
       - name: 注入播放器源码与资源
