@@ -63,6 +63,10 @@ jobs:
         run: |
           export ANDROID_HOME="$ANDROID_SDK_ROOT"
           cd "$HOME/Urho3D"
+          # rake new 用 first_match(/^# (Urho3D)$/, README.md) 判断是否处于项目根目录；
+          # 该代码在新版 Ruby 下不可靠，先把 "# Urho3D" 提为 README 首行，绕开判断
+          sed -i '1i # Urho3D' README.md
+          head -1 README.md
           PLATFORM=android rake new[AniPlayer,$HOME]
 
       - name: 注入播放器源码与资源
